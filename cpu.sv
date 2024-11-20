@@ -1,13 +1,14 @@
 // states
-`define waitState       9'b000000001
-`define getAState       9'b000000010
-`define getBState       9'b000000100
-`define ALUState        9'b000001000
-`define writeRegRmState 9'b000010000
-`define writeRegRdState 9'b000100000
-`define shiftState      9'b001000000
-`define movImmState     9'b010000000
-`define statusState     9'b100000000
+`define waitState       10'b0000000001
+`define getAState       10'b0000000010
+`define getBState       10'b0000000100
+`define ALUState        10'b0000001000
+`define writeRegRmState 10'b0000010000
+`define writeRegRdState 10'b0000100000
+`define shiftState      10'b0001000000
+`define movImmState     10'b0010000000
+`define statusState     10'b0100000000
+`define Decode          10'b1000000000
 
 module cpu(clk,reset,s,load,in,out,N,V,Z,w);
     input clk, reset, s, load;
@@ -15,16 +16,17 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
     output [15:0] out;
     output reg N, V, Z, w;
 
-    reg [3:0] present_state;
+    reg [9:0] present_state;
 
     // datapath module initialization
     wire clk;
     reg asel, bsel, loada, loadb, loadc, loads, write; 
-    reg [1:0] ALUop, shift;
-    reg [2:0] readnum, writenum;
+    wire [1:0] ALUop, shift;
+    wire [2:0] readnum, writenum;
     wire [2:0] Z_out;
     reg [3:0] vsel;
     wire [7:0] PC;
+    assign PC = 8'b0;
     wire [15:0] datapath_out, mdata, sximm8, sximm5;
 
     // instrucDecoder initialization
@@ -68,7 +70,7 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
                 `waitState: begin
                     //resetting control signals
                     nsel = 3'b000;
-                    vsel = 0;
+                    vsel = 4'b0000;
                     asel = 0;
                     bsel = 0;
                     loada = 0;
@@ -83,7 +85,11 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
                     if (~s) begin  // if s = 0, wait state
                         present_state = `waitState;
                     end else begin
+                        present_state = `Decode;
+                    end
+                end
 
+                `Decode:  begin
                     if (opcode == 3'b110) begin  // MOV instructions
                                     case (op)  // move instructions
                                         2'b10:  present_state = `movImmState;    // MOVimm starts at movImmState
@@ -98,12 +104,18 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
                                     endcase
                                 end
                     end
-                end
                 
                 `getAState: begin
                                 // outputs to get A
-                                nsel = 3'b100; 
+                                nsel = 3'b100;
+                                vsel = 4'b0000;
+                                asel = 0;
+                                bsel = 0;
                                 loada = 1;
+                                loadb = 0;
+                                loads = 0;
+                                loadc = 0;
+                                write = 0;
                                 w = 0;
 
                                 if (opcode == 3'b101) begin
@@ -119,8 +131,15 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
 
                 `getBState: begin
                                 //outputs to get B
-                                nsel = 001;
+                                nsel = 3'b001;
+                                vsel = 4'b0000;
+                                asel = 0;
+                                bsel = 0;
+                                loada = 0;
                                 loadb = 1;
+                                loads = 0;
+                                loadc = 0;
+                                write = 0;
                                 w = 0;
 
                                 if (ALUop == 2'b00 && opcode == 3'b101) begin 
@@ -141,9 +160,17 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
 
                 `ALUState:  begin
                                 // output to complete ALU operation
+                                nsel = 3'b000;
+                                vsel = 4'b0000;
                                 asel = 0;
                                 bsel = 0;
-                                
+                                loada = 0;
+                                loadb = 0;
+                                loads = 0;
+                                loadc = 1;
+                                write = 0;
+                                w = 0;
+
                                 if (opcode == 3'b101) begin
                                     case (ALUop)
                                         2'b00, 2'b10:  present_state = `writeRegRdState;  // ADD (2), AND (2), go to writeRegRdState
@@ -157,28 +184,46 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
                 `writeRegRdState:   begin
                                         // output to write value to register Rd
                                         nsel = 3'b010;
-                                        vsel = 0;
+                                        vsel = 4'b0001;
+                                        asel = 0;
+                                        bsel = 0;
+                                        loada = 0;
+                                        loadb = 0;
+                                        loads = 0;
+                                        loadc = 0;
                                         write = 1;
-                                        w = 0;
-                                        
+                                        w = 0;      
+                                                                          
                                         present_state = `waitState; // ADD (3*), AND (3*) go back to waitState
                                     end
 
                 `writeRegRmState:   begin
                                         //output to write value to register Rm
-                                        nsel = 3'b010;
-                                        vsel = 0;
+                                        nsel = 3'b001;
+                                        vsel = 2'b0001;
+                                        asel = 0;
+                                        bsel = 0;
+                                        loada = 0;
+                                        loadb = 0;
+                                        loads = 0;
+                                        loadc = 0;
                                         write = 1;
                                         w = 0;
-                                        
+
                                         present_state = `waitState;  // MVN (3*), MOV shift (3*), finish and go back to waitState
                                     end
 
                 `shiftState:    begin 
                                     // output to shift value in B
+                                    nsel = 3'b000;
+                                    vsel = 4'b0000;
                                     asel = 1;
                                     bsel = 0;
+                                    loada = 0;
+                                    loadb = 0;
+                                    loads = 0;
                                     loadc = 1;
+                                    write = 0;
                                     w = 0;
 
                                     present_state = `writeRegRmState;  // MVN (2), MOV shift (2), go to writeRegRmState
@@ -187,17 +232,29 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
                 `movImmState:   begin
                                     // output to move immediate value into reg
                                     nsel = 3'b100;
-                                    vsel = 1;
+                                    vsel = 4'b0100;
+                                    asel = 0;
+                                    bsel = 0;
+                                    loada = 0;
+                                    loadb = 0;
+                                    loads = 0;
+                                    loadc = 0;
                                     write = 1;
                                     w = 0;
-                                    
+
                                     present_state = `waitState;  // MOV imm has 1 state then goes back to waitState
                                 end
 
                 `statusState:   begin
+                                    nsel = 3'b000;
+                                    vsel = 4'b0000;
                                     asel = 0;
                                     bsel = 0;
+                                    loada = 0;
+                                    loadb = 0;
                                     loads = 1;
+                                    loadc = 0;
+                                    write = 0;
                                     w = 0;
 
                                     present_state = `waitState; // CMP (3*) 
@@ -209,9 +266,7 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
     
     end
 
-
-
-    
+   
     // datapath block
     datapath DP(
         .clk         (clk),
@@ -250,27 +305,27 @@ endmodule
 
 // ------------------------ helper modules -------------------------- //
 
-// flip flop
-module vDFF(clk, in, out) ;
-  parameter n = 1;  // width
-  input clk ;
-  input [n-1:0] in ;
-  output [n-1:0] out ;
-  reg [n-1:0] out ;
+// // flip flop
+// module vDFF(clk, in, out) ;
+//   parameter n = 1;  // width
+//   input clk ;
+//   input [n-1:0] in ;
+//   output [n-1:0] out ;
+//   reg [n-1:0] out ;
 
-  always_ff @(posedge clk)
-    out = in ;
-endmodule
+//   always_ff @(posedge clk)
+//     out = in ;
+// endmodule
 
-// load enable circuit
-module loadEnableCircuit(in, load, clk, out);
-  input [15:0] in;
-  input load, clk;
-  output [15:0] out;
-  wire [15:0] next = load ? in : out;
+// // load enable circuit
+// module loadEnableCircuit(in, load, clk, out);
+//   input [15:0] in;
+//   input load, clk;
+//   output [15:0] out;
+//   wire [15:0] next = load ? in : out;
 
-  vDFF #(16) flipflop(clk, next, out);
-endmodule
+//   vDFF #(16) flipflop(clk, next, out);
+// endmodule
 
 // instruction decoder block
 module instrucDecoder(instrucreg, nsel, opcode, op, ALUop, sximm5, sximm8, shift, readnum, writenum);

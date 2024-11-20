@@ -12,25 +12,28 @@ module datapath(clk, readnum, writenum,
     input [2:0] readnum, writenum;                              // Reg select signals
     input [1:0] ALUop, shift;                                   // ALU and shift component inputs
     input asel, bsel, loada, loadb, loadc, loads, write;  
-    input [3:0] vsel;  // changed to 4 bits
+    input [3:0] vsel;  // changed to 2 bits
     output reg [2:0] Z_out;       //changed to 3 bits                                    // Zero output
     output [15:0] datapath_out;
 
     // lab 6 new inputs
     input [15:0] mdata, sximm8, sximm5;
     input [7:0] PC;
-    assign PC = 8'b0;
 
-    wire [15:0] data_in, data_out, loadAout, loadBout, Ain, Bin, sout, out; // Declared as wires because these are connections between different blocks
+    reg [15:0] data_in, data_out, loadAout, loadBout, Ain, Bin, sout, out; // Declared as wires because these are connections between different blocks
     wire [2:0] Z; // changed to 3 bits
 
     // block 9: MUX
     // Multiplexer with inputs mdata,sximm8, PC, and datapath_out with vsel as select
-    // 00 = mdata
-    // 01 = sximm8
-    // 10 = PC
-    // 11 = datapath_out
-    assign data_in = vsel[1] ? (vsel[0] ? datapath_out : {8'b0,PC}) : (vsel[0] ? sximm8 : mdata);
+    always @(*) begin
+        case (vsel)
+            4'b0001:  data_in = datapath_out;
+            4'b0010:  data_in = {8'b0,PC};
+            4'b0100:  data_in = sximm8;
+            4'b1000:  data_in = mdata;
+            default: data_in = 16'bx; // default 
+        endcase
+    end
 
     // block 1: Register Block
     // This register is responsible for storing and retrieving data based on the read and write signals.
