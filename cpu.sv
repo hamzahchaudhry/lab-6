@@ -200,7 +200,7 @@ module cpu(clk,reset,s,load,in,out,N,V,Z,w);
                 `writeRegRmState:   begin
                                         //output to write value to register Rm
                                         nsel = 3'b001;
-                                        vsel = 2'b0001;
+                                        vsel = 4'b0001;
                                         asel = 0;
                                         bsel = 0;
                                         loada = 0;
